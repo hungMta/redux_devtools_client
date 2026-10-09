@@ -1,0 +1,14 @@
+name: redux_devtools_client
+description: Streams Redux actions and state from a Dart/Flutter app to the Redux DevTools desktop viewer over WebSocket.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  redux: ^5.0.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6

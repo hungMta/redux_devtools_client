@@ -11,6 +11,18 @@ class Throws {
   Map<String, dynamic> toJson() => throw StateError('boom');
 }
 
+class FakeProto {
+  Object? toProto3Json() => {'channelId': 'c1', 'createTime': {'seconds': '1'}};
+  @override
+  String toString() => 'channelId: c1';
+}
+
+class BadProto {
+  Object? toProto3Json() => throw ArgumentError('Any needs a registry');
+  @override
+  String toString() => 'BadProto';
+}
+
 class Plain {
   @override
   String toString() => 'Plain()';
@@ -50,6 +62,16 @@ void main() {
       'list': [
         {'Password': '<redacted>'},
       ],
+    });
+  });
+
+  test('converts protobuf messages through toProto3Json', () {
+    expect(toJsonSafe({'msg': FakeProto(), 'bad': BadProto()}), {
+      'msg': {
+        'channelId': 'c1',
+        'createTime': {'seconds': '1'},
+      },
+      'bad': 'BadProto',
     });
   });
 }

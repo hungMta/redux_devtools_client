@@ -157,4 +157,64 @@ void main() {
     await devtools.dispose();
     await blocker.close();
   });
+
+  test('listens on loopback only unless allowLan is set', () async {
+    final devtools = DevToolsMiddleware<int>(
+      port: 0,
+      stateToJson: (s) => s,
+      onLog: (_) {},
+    );
+    devtools.attach(buildStore(devtools));
+    final port = await devtools.listeningPort;
+    final lan = [
+      for (final i in await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+      ))
+        ...i.addresses.where((a) => !a.isLoopback),
+    ];
+    for (final address in lan) {
+      await expectLater(
+        Socket.connect(address, port!, timeout: const Duration(seconds: 2)),
+        throwsA(isA<SocketException>()),
+      );
+    }
+    await devtools.dispose();
+  });
+
+  test('refuses browser requests that carry an Origin header', () async {
+    final devtools = DevToolsMiddleware<int>(
+      port: 0,
+      stateToJson: (s) => s,
+      onLog: (_) {},
+    );
+    devtools.attach(buildStore(devtools));
+    final port = await devtools.listeningPort;
+    await expectLater(
+      WebSocket.connect(
+        'ws://localhost:$port',
+        headers: {'Origin': 'https://evil.example'},
+      ),
+      throwsA(isA<WebSocketException>()),
+    );
+    final client = HttpClient();
+    final request = await client.get('localhost', port!, '/info');
+    request.headers.set('Origin', 'https://evil.example');
+    expect((await request.close()).statusCode, HttpStatus.forbidden);
+    client.close();
+    await devtools.dispose();
+  });
+
+  test('does nothing but forward actions when disabled', () async {
+    final devtools = DevToolsMiddleware<int>(
+      enabled: false,
+      stateToJson: (s) => s,
+      onLog: (_) => fail('should not log'),
+    );
+    final store = buildStore(devtools);
+    devtools.attach(store);
+    store.dispatch(Increment(2));
+    expect(store.state, 2);
+    expect(await devtools.listeningPort, isNull);
+    await devtools.dispose();
+  });
 }

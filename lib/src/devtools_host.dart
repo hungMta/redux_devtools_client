@@ -6,10 +6,16 @@ import 'dart:io';
 ///
 /// Tries [port], then the next [portAttempts] - 1 ports, so several apps (or
 /// simulators sharing the Mac's network) can run side by side.
+///
+/// Listens on loopback only unless [allowLan] is set. The iOS simulator and
+/// `adb forward` both reach the device's loopback, so only a physical iPhone
+/// needs LAN. Requests that carry an `Origin` header come from a browser page
+/// and are refused, so a website open on the same machine cannot read state.
 class DevToolsHost {
   DevToolsHost({
     required this.port,
     this.portAttempts = 10,
+    this.allowLan = false,
     required this.onViewerConnected,
     required this.onViewerMessage,
     this.info,
@@ -18,6 +24,7 @@ class DevToolsHost {
 
   final int port;
   final int portAttempts;
+  final bool allowLan;
   final void Function(WebSocket viewer) onViewerConnected;
   final void Function(WebSocket viewer, String message) onViewerMessage;
   final void Function(String message)? onLog;
@@ -38,7 +45,10 @@ class DevToolsHost {
     final attempts = port == 0 ? 1 : portAttempts;
     for (var i = 0; i < attempts; i++) {
       try {
-        final server = await HttpServer.bind(InternetAddress.anyIPv4, port + i);
+        final server = await HttpServer.bind(
+          allowLan ? InternetAddress.anyIPv4 : InternetAddress.loopbackIPv4,
+          port + i,
+        );
         _server = server;
         server.listen((request) => unawaited(_handle(request)));
         _ready.complete(server.port);
@@ -56,6 +66,10 @@ class DevToolsHost {
 
   Future<void> _announce(int boundPort) async {
     final urls = ['ws://localhost:$boundPort'];
+    if (!allowLan) {
+      onLog?.call('Redux DevTools listening on ${urls.single}');
+      return;
+    }
     try {
       final interfaces = await NetworkInterface.list(
         type: InternetAddressType.IPv4,
@@ -70,6 +84,11 @@ class DevToolsHost {
   }
 
   Future<void> _handle(HttpRequest request) async {
+    if (request.headers.value('origin') != null) {
+      request.response.statusCode = HttpStatus.forbidden;
+      await request.response.close();
+      return;
+    }
     if (!WebSocketTransformer.isUpgradeRequest(request)) {
       if (request.uri.path == '/info') {
         request.response

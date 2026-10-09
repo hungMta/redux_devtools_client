@@ -15,7 +15,12 @@ middleware: [
 ]
 ```
 
-Options: `port`, `sendState`, `stateThrottle` (default 300 ms, trailing),
+Security: listens on loopback only by default (the iOS simulator and
+`adb forward` both reach it); pass `allowLan: true` for a physical iPhone.
+Requests carrying an `Origin` header (browser pages) are refused. In release
+builds `enabled` defaults to false and the middleware only forwards actions.
+
+Options: `port`, `allowLan`, `enabled`, `sendState`, `stateThrottle` (default 300 ms, trailing),
 `historySize` (actions replayed to a late viewer, default 500), `redactKeys`
 (defaults to password/token/otp/pin…), `stateSanitizer`, `actionSanitizer`,
 `actionToJson`, `actionTypeOf`, `onLog` (default `print`). Call

@@ -17,8 +17,9 @@ typedef JsonSanitizer = Object? Function(Object? json);
 ///
 /// The app hosts a WebSocket server (default port 8765, printed to the console
 /// on start); the viewer connects to it, like Flutter DevTools. Add `.call` to
-/// the store's middleware list in debug builds only. Nothing here throws into
-/// the app: errors go to [onLog] and are otherwise ignored.
+/// the store's middleware list in debug builds only; in a release build it
+/// passes actions through and never opens a port, even if left in. Nothing
+/// here throws into the app: errors go to [onLog] and are otherwise ignored.
 ///
 /// While no viewer is connected only the last [historySize] actions are kept
 /// (without state), so an idle DevTools costs almost nothing. A viewer that
@@ -33,6 +34,8 @@ class DevToolsMiddleware<S> {
     this.actionToJson,
     this.actionTypeOf,
     this.port = kDevToolsDefaultPort,
+    this.allowLan = false,
+    this.enabled = !kDevToolsReleaseBuild,
     this.appName = 'app',
     this.sendState = true,
     this.stateThrottle = const Duration(milliseconds: 300),
@@ -57,6 +60,14 @@ class DevToolsMiddleware<S> {
 
   /// First port to try; the next 9 are tried if it is taken. 0 picks any.
   final int port;
+
+  /// Also listen on the LAN, for a physical iPhone. Off by default: anyone on
+  /// the same network could then read the state.
+  final bool allowLan;
+
+  /// When false the middleware only forwards actions. Defaults to false in
+  /// release builds.
+  final bool enabled;
   final String appName;
   final bool sendState;
   final Duration stateThrottle;
@@ -83,17 +94,20 @@ class DevToolsMiddleware<S> {
   int? _pendingStateActionId;
 
   /// The port the app listens on once started, or null if none was free.
-  Future<int?> get listeningPort => _ensureHost().listeningPort;
+  Future<int?> get listeningPort async =>
+      enabled ? _ensureHost().listeningPort : null;
 
   /// Starts the server before the first action, so the address is printed at
   /// launch. Optional: the first dispatched action starts it too.
   void attach(Store<S> store) {
+    if (!enabled) return;
     _store = store;
     _ensureHost();
   }
 
   void call(Store<S> store, dynamic action, NextDispatcher next) {
     next(action);
+    if (!enabled) return;
     try {
       _store = store;
       _ensureHost();
@@ -108,6 +122,7 @@ class DevToolsMiddleware<S> {
     if (existing != null) return existing;
     final host = DevToolsHost(
       port: port,
+      allowLan: allowLan,
       onViewerConnected: _onViewerConnected,
       onViewerMessage: _onViewerMessage,
       info: () => {

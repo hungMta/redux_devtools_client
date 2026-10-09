@@ -1,6 +1,8 @@
 /// Converts any value into a tree of JSON primitives, maps and lists.
 ///
-/// Never throws: values that cannot be converted become their `toString()`,
+/// Objects with `toJson()` are converted through it, protobuf messages through
+/// `toProto3Json()`. Never throws: values that cannot be converted become their
+/// `toString()`,
 /// and a failing `toJson()` becomes an `<error: ...>` string. Keys listed in
 /// [redactKeys] (compared lower-case) are replaced with `'<redacted>'`.
 Object? toJsonSafe(
@@ -65,6 +67,14 @@ Object? _tryToJson(Object value) {
   try {
     return (value as dynamic).toJson();
   } on NoSuchMethodError {
+    // Not a json_serializable-style class; try a protobuf message below.
+  }
+  try {
+    return (value as dynamic).toProto3Json();
+  } on NoSuchMethodError {
+    return _noToJson;
+  } catch (_) {
+    // e.g. an `Any` field without a type registry: fall back to toString().
     return _noToJson;
   }
 }

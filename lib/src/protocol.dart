@@ -22,3 +22,6 @@ abstract final class DevToolsMessageType {
 }
 
 const kDevToolsDefaultPort = 8765;
+
+/// True in release (product) builds, where the middleware turns itself off.
+const bool kDevToolsReleaseBuild = bool.fromEnvironment('dart.vm.product');
